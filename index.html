@@ -1,200 +1,664 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Runner — Expanded City & Impact Edition (Raytrace-ish)</title>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #050510; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
-        #ui-container { position: absolute; z-index: 2; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        #crosshair { width: 8px; height: 8px; background-color: rgba(255,255,255,0.8); border-radius:50%; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); border:1px solid black; }
-        /* (UI CSS omitted for brevity; unchanged from previous commit) */
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neon Runner — Raytrace-Like Graphics Upgrade</title>
+  <style>
+    :root {
+      --bg-0: #030712;
+      --bg-1: #091827;
+      --cyan: #72ecff;
+      --cyan-strong: #00f5ff;
+      --pink: #ff5ad9;
+      --green: #96ffcc;
+      --text: #dfeeff;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 18%, #0b1830 0%, #050b16 40%, #02070d 100%);
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      user-select: none;
+    }
+
+    body {
+      position: relative;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    #ui {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    #crosshair {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.8), 0 0 16px rgba(255,255,255,0.7);
+    }
+
+    #crosshair::before,
+    #crosshair::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.7);
+    }
+
+    #crosshair::before {
+      width: 1px; height: 22px;
+    }
+
+    #crosshair::after {
+      width: 22px; height: 1px;
+    }
+
+    #hud {
+      position: absolute;
+      left: 22px;
+      bottom: 24px;
+      padding: 14px 18px;
+      border: 1px solid rgba(100, 226, 255, 0.4);
+      background: rgba(8, 15, 28, 0.42);
+      border-radius: 10px;
+      box-shadow: 0 18px 30px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+    }
+
+    #hud-label {
+      font-size: 11px;
+      letter-spacing: 0.22rem;
+      color: #a9d8f6;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      opacity: 0.9;
+    }
+
+    #speed-bar-container {
+      width: 220px;
+      height: 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(110, 200, 255, 0.25);
+      border-radius: 999px;
+      overflow: hidden;
+      box-shadow: inset 0 0 12px rgba(0,0,0,0.4);
+    }
+
+    #speed-bar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #7ef9ff 0%, #42d1ff 40%, #b177ff 100%);
+      box-shadow: 0 0 14px rgba(87, 252, 255, 0.8);
+      transition: width 0.12s linear;
+    }
+
+    #score {
+      position: absolute;
+      right: 24px;
+      top: 16px;
+      text-align: right;
+      font-family: "Courier New", monospace;
+      display: none;
+      pointer-events: none;
+    }
+
+    #score-value {
+      font-size: 38px;
+      color: #ffe45d;
+      font-weight: 900;
+      text-shadow: 0 0 10px rgba(255, 228, 90, 0.5);
+    }
+
+    #mission {
+      margin-top: 6px;
+      color: orange;
+      font-size: 18px;
+      letter-spacing: 0.08rem;
+      text-transform: uppercase;
+      font-weight: 800;
+      text-shadow: 0 0 12px rgba(255, 164, 0, 0.6);
+    }
+
+    #menu {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(2, 5, 12, 0.72);
+      backdrop-filter: blur(4px);
+    }
+
+    .panel {
+      width: min(620px, calc(100vw - 32px));
+      padding: 30px 28px;
+      border-radius: 20px;
+      border: 1px solid rgba(121, 223, 255, 0.25);
+      background: linear-gradient(180deg, rgba(8, 18, 30, 0.78), rgba(5, 10, 20, 0.9));
+      box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 36px rgba(0, 150, 255, 0.12);
+      text-align: center;
+    }
+
+    .brand {
+      margin: 0 0 18px;
+      font-size: clamp(42px, 7vw, 72px);
+      letter-spacing: 0.22em;
+      color: #dffcff;
+      text-transform: uppercase;
+      text-shadow: 0 0 20px rgba(123, 238, 255, 0.75), 0 0 42px rgba(61, 190, 255, 0.45);
+    }
+
+    .btns {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+
+    button {
+      width: min(100%, 420px);
+      border: 1px solid rgba(123, 238, 255, 0.8);
+      background: rgba(15, 32, 48, 0.55);
+      color: white;
+      font-size: 18px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      padding: 14px 18px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      background: rgba(28, 57, 79, 0.9);
+      box-shadow: 0 0 18px rgba(91, 239, 255, 0.25);
+    }
+
+    .pink {
+      border-color: rgba(255, 90, 217, 0.85);
+      box-shadow: 0 0 12px rgba(255, 90, 217, 0.18);
+    }
+
+    .small {
+      font-size: 12px;
+      letter-spacing: 0.17em;
+      color: rgba(220, 234, 255, 0.7);
+      margin-top: 18px;
+    }
+
+    #mini-toast {
+      position: absolute;
+      left: 50%;
+      top: 18%;
+      transform: translateX(-50%);
+      font-weight: 900;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-size: 24px;
+      opacity: 0;
+      color: #ff5c7c;
+      transition: opacity 0.35s ease;
+      text-shadow: 0 0 16px rgba(255, 92, 124, 0.7);
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body>
+  <div id="ui">
+    <div id="crosshair"></div>
+    <div id="hud">
+      <div id="hud-label">Momentum</div>
+      <div id="speed-bar-container"><div id="speed-bar"></div></div>
+    </div>
+    <div id="score">
+      <div>SCORE: <span id="score-value">0</span></div>
+      <div id="mission">Locate Package</div>
+    </div>
+    <div id="mini-toast">You Fell!</div>
+  </div>
 
-<div id="ui-container">
-  <div id="crosshair"></div>
-</div>
+  <div id="menu">
+    <div class="panel">
+      <h1 class="brand">Neon Runner</h1>
+      <div class="btns">
+        <button onclick="startGame('standard')">Realistic City</button>
+        <button onclick="startGame('classic')" class="pink">Classic Neon Mode</button>
+        <button onclick="startGame('pure')">Pure Parkour</button>
+      </div>
+      <div class="small">Enhanced graphics mode enabled</div>
+    </div>
+  </div>
 
-<div id="main-menu">
-  <h1 style="color:cyan;font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;letter-spacing:8px">NEON RUNNER</h1>
-  <button onclick="initGame('standard')">REALISTIC CITY</button>
-  <button onclick="initGame('classic')">CLASSIC NEON MODE</button>
-  <button onclick="initGame('pure')">PURE PARKOUR (NO GRAPPLE)</button>
-</div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/SSAOPass.js"></script>
 
-<!-- Three.js core + postprocessing + SSAO -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/SSAOPass.js"></script>
+  <script>
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050b16);
+    scene.fog = new THREE.Fog(0x050b16, 40, 500);
 
-<script>
-// --- Raytrace-like improvements summary ---
-// What this does:
-// 1) Uses ACES tone mapping + sRGB output for more filmic color response
-// 2) Generates an environment map from the sky mesh (PMREM) so materials have plausible reflections
-// 3) Adds an SSAO pass for contact shadows and depth shading
-// 4) Keeps bloom and increases shadow quality for a tighter, "raytraced" look
-// Note: Real raytracing (path tracing) requires specialized renderers or WebGPU path tracers. This is a screen-space & PBR approximation.
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 2000);
+    camera.position.set(0, 24, 60);
+    camera.rotation.order = 'YXZ';
 
-// --- Scene + camera + renderer ---
-const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x050510, 30, 600);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 2000);
-camera.position.set(0, 160, 220);
+    // Atmosphere / sky
+    const skyGroup = new THREE.Group();
+    scene.add(skyGroup);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
-renderer.domElement.style.position = 'fixed';
-renderer.domElement.style.inset = '0';
+    const skySphere = new THREE.Mesh(
+      new THREE.SphereGeometry(1400, 64, 64),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        uniforms: {
+          topColor: { value: new THREE.Color(0x0a1634) },
+          bottomColor: { value: new THREE.Color(0x030712) }
+        },
+        vertexShader: `
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPosition.xyz;
+            gl_Position = projectionMatrix * viewMatrix * worldPosition;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 topColor;
+          uniform vec3 bottomColor;
+          varying vec3 vWorldPosition;
+          void main() {
+            float h = normalize(vWorldPosition).y;
+            float mixAmount = smoothstep(-0.2, 0.9, h);
+            vec3 color = mix(bottomColor, topColor, mixAmount);
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `
+      })
+    );
+    skyGroup.add(skySphere);
 
-// PMREM generator used to make a realistic environment map from the sky
-const pmremGenerator = new THREE.PMREMGenerator(renderer);
-pmremGenerator.compileEquirectangularShader();
+    const sunGlow = new THREE.Mesh(
+      new THREE.SphereGeometry(18, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffd7aa, transparent: true, opacity: 0.16 })
+    );
+    sunGlow.position.set(-180, 210, -220);
+    skyGroup.add(sunGlow);
 
-// Sky gradient as a large inverted sphere (used to make environment)
-const skyGeo = new THREE.SphereGeometry(1000, 32, 32);
-const skyMat = new THREE.ShaderMaterial({ side: THREE.BackSide, uniforms: { topColor: { value: new THREE.Color(0x0b1630) }, bottomColor: { value: new THREE.Color(0x02040a) } }, vertexShader: `varying vec3 vPos; void main(){ vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`, fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; varying vec3 vPos; void main(){ float h = normalize(vPos).y * 0.5 + 0.5; vec3 c = mix(bottomColor, topColor, smoothstep(0.0,1.0,h)); gl_FragColor = vec4(c,1.0); }` });
-const skyMesh = new THREE.Mesh(skyGeo, skyMat);
-scene.add(skyMesh);
+    const hemi = new THREE.HemisphereLight(0xcfeaff, 0x111a22, 0.9);
+    scene.add(hemi);
 
-// Create environment from sky (gives PBR materials reflective context)
-const envMapRender = pmremGenerator.fromScene(skyMesh, 0.04);
-scene.environment = envMapRender.texture;
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
+    dirLight.position.set(180, 220, 120);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.left = -400;
+    dirLight.shadow.camera.right = 400;
+    dirLight.shadow.camera.top = 400;
+    dirLight.shadow.camera.bottom = -400;
+    dirLight.shadow.bias = -0.0004;
+    dirLight.shadow.radius = 4;
+    scene.add(dirLight);
 
-// --- Lighting ---
-const ambientLight = new THREE.AmbientLight(0x6a8bb8, 0.45);
-scene.add(ambientLight);
+    const rimLight = new THREE.DirectionalLight(0x7be9ff, 0.8);
+    rimLight.position.set(-180, 120, -120);
+    scene.add(rimLight);
 
-const hemi = new THREE.HemisphereLight(0xcfe9ff, 0x0a0f18, 0.9);
-scene.add(hemi);
+    const ambientLight = new THREE.AmbientLight(0x7f9ac7, 0.5);
+    scene.add(ambientLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
-dirLight.position.set(140, 220, 100);
-dirLight.castShadow = true;
-dirLight.shadow.mapSize.width = 4096;
-dirLight.shadow.mapSize.height = 4096;
-dirLight.shadow.camera.left = -600;
-dirLight.shadow.camera.right = 600;
-dirLight.shadow.camera.top = 600;
-dirLight.shadow.camera.bottom = -600;
-dirLight.shadow.radius = 6;
-dirLight.shadow.bias = -0.0006;
-scene.add(dirLight);
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmremGenerator.fromScene(new THREE.Scene(), 0.04).texture;
 
-// Rim light to accent neon edges
-const rim = new THREE.DirectionalLight(0x66d6ff, 0.9);
-rim.position.set(-120, 130, -80);
-scene.add(rim);
+    const composer = new THREE.EffectComposer(renderer);
+    const renderPass = new THREE.RenderPass(scene, camera);
+    composer.addPass(renderPass);
 
-// subtle glow object
-const glow = new THREE.Mesh(new THREE.SphereGeometry(18, 24, 24), new THREE.MeshBasicMaterial({ color: 0xffd7a5, transparent: true, opacity: 0.12 }));
-glow.position.set(-140, 180, -180);
-scene.add(glow);
+    const ssaoPass = new THREE.SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+    ssaoPass.kernelRadius = 18;
+    ssaoPass.radius = 0.75;
+    ssaoPass.aoClamp = 0.5;
+    ssaoPass.minDistance = 0.015;
+    ssaoPass.maxDistance = 0.5;
+    ssaoPass.output = THREE.SSAOPass.OUTPUT.Default;
+    composer.addPass(ssaoPass);
 
-// --- Materials: PBR tuned for reflections & neon ---
-const matGround = new THREE.MeshStandardMaterial({ color: 0x0f1720, roughness: 0.96, metalness: 0.04 });
-const matConcrete = new THREE.MeshStandardMaterial({ color: 0x394650, roughness: 0.68, metalness: 0.12 });
-const matGlass = new THREE.MeshPhysicalMaterial({ color: 0x274249, roughness: 0.1, metalness: 0.35, clearcoat: 1.0, clearcoatRoughness: 0.06, reflectivity: 0.7, envMapIntensity: 1.1, transparent: true, opacity: 0.94 });
-const matNeon = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 1.6, roughness: 0.2, metalness: 0.0 });
-const matJumpPad = new THREE.MeshStandardMaterial({ color: 0x7ef9ff, emissive: 0x18d5ff, emissiveIntensity: 1.6, roughness: 0.15 });
+    const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.1, 0.5, 0.9);
+    bloomPass.threshold = 0.09;
+    bloomPass.strength = 1.0;
+    bloomPass.radius = 0.75;
+    composer.addPass(bloomPass);
 
-// --- Simple world generator (kept small for performance) ---
-const objects = [];
-function makeBuilding(x, z, w, d, h, mat = matConcrete) {
-  const geom = new THREE.BoxGeometry(w, h, d);
-  const mesh = new THREE.Mesh(geom, mat);
-  mesh.position.set(x, h/2 - 2, z);
-  mesh.castShadow = true; mesh.receiveShadow = true;
-  scene.add(mesh);
-  objects.push(mesh);
-  // neon outline approximated with line segments for 'classic' look
-  const edges = new THREE.EdgesGeometry(geom);
-  const edgeLine = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x7fe8ff, linewidth: 1 }));
-  edgeLine.position.copy(mesh.position);
-  scene.add(edgeLine);
-}
+    const copyPass = new THREE.ShaderPass(THREE.CopyShader);
+    copyPass.renderToScreen = true;
+    composer.addPass(copyPass);
 
-function generateCity() {
-  // cleanup
-  objects.forEach(o=>scene.remove(o)); objects.length = 0;
-  // grid
-  const spacing = 60;
-  for (let xi=-3; xi<=3; xi++) {
-    for (let zi=-3; zi<=3; zi++) {
-      const w = 20 + Math.random()*60;
-      const d = 20 + Math.random()*60;
-      const h = 30 + Math.random()*220;
-      makeBuilding(xi*spacing + (Math.random()-0.5)*8, zi*spacing + (Math.random()-0.5)*8, w, d, h, Math.random()>0.7?matGlass:matConcrete);
+    const worldObjects = [];
+    const neonObjects = [];
+
+    const matGround = new THREE.MeshStandardMaterial({ color: 0x0d1720, roughness: 0.95, metalness: 0.08 });
+    const matConcrete = new THREE.MeshStandardMaterial({ color: 0x364b5d, roughness: 0.72, metalness: 0.15 });
+    const matGlass = new THREE.MeshPhysicalMaterial({
+      color: 0x1d3a4d,
+      emissive: 0x0c1d2b,
+      roughness: 0.14,
+      metalness: 0.35,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.08,
+      reflectivity: 0.85,
+      envMapIntensity: 1.6,
+      transparent: true,
+      opacity: 0.95
+    });
+    const matSteel = new THREE.MeshStandardMaterial({ color: 0x2d3d4f, roughness: 0.42, metalness: 0.82 });
+    const matPipe = new THREE.MeshStandardMaterial({ color: 0x2b3f52, roughness: 0.25, metalness: 0.75 });
+    const matNeon = new THREE.MeshStandardMaterial({ color: 0x61f4ff, emissive: 0x4ae9ff, emissiveIntensity: 1.6, roughness: 0.2, metalness: 0.1 });
+    const matPink = new THREE.MeshStandardMaterial({ color: 0xff69d9, emissive: 0xff68d5, emissiveIntensity: 1.5, roughness: 0.25, metalness: 0.12 });
+    const matJumpPad = new THREE.MeshStandardMaterial({ color: 0x7ef9ff, emissive: 0x18d5ff, emissiveIntensity: 1.4, roughness: 0.1 });
+
+    function addBlock(x, y, z, sx, sy, sz, mat = matConcrete, neon = false) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+      worldObjects.push(mesh);
+
+      if (neon) {
+        const outline = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(sx, sy, sz)),
+          new THREE.LineBasicMaterial({ color: 0x7fe9ff })
+        );
+        outline.position.copy(mesh.position);
+        scene.add(outline);
+        neonObjects.push(outline);
+      }
+
+      return mesh;
     }
-  }
-  // ground plane
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000,4000), matGround);
-  ground.rotation.x = -Math.PI/2; ground.position.y = -2; ground.receiveShadow = true; scene.add(ground);
-}
 
-// --- Composer: Render + SSAO + Bloom ---
-const composer = new THREE.EffectComposer(renderer);
-const renderPass = new THREE.RenderPass(scene, camera);
-composer.addPass(renderPass);
+    function addPipe(x, y, z, height) {
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, height, 16), matPipe);
+      pipe.position.set(x, y, z);
+      pipe.rotation.z = Math.PI / 2;
+      pipe.castShadow = true;
+      pipe.receiveShadow = true;
+      scene.add(pipe);
+      worldObjects.push(pipe);
+      return pipe;
+    }
 
-// SSAO pass gives contact-shadow like occlusion
-const ssaoPass = new THREE.SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
-ssaoPass.kernelRadius = 16;
-ssaoPass.radius = 0.6;
-ssaoPass.aoClamp = 0.6;
-ssaoPass.output = THREE.SSAOPass.OUTPUT.Default;
-composer.addPass(ssaoPass);
+    function addMarker(x, y, z, color = 0x00ffff) {
+      const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(4, 0), new THREE.MeshStandardMaterial({
+        color: color,
+        emissive: color,
+        emissiveIntensity: 1.6,
+        metalness: 0.2,
+        roughness: 0.3
+      }));
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      scene.add(mesh);
+      neonObjects.push(mesh);
+      return mesh;
+    }
 
-// Bloom
-const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.0, 0.6, 0.85);
-bloomPass.threshold = 0.08; bloomPass.strength = 1.0; bloomPass.radius = 0.6;
-composer.addPass(bloomPass);
+    function makeCity() {
+      for (const o of worldObjects) scene.remove(o);
+      for (const o of neonObjects) scene.remove(o);
+      worldObjects.length = 0;
+      neonObjects.length = 0;
 
-// final copy pass
-const copyPass = new THREE.ShaderPass(THREE.CopyShader);
-copyPass.renderToScreen = true; composer.addPass(copyPass);
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), matGround);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+      worldObjects.push(ground);
 
-// --- Controls (very lightweight orbit for preview) ---
-let isPointerDown = false; let prevX=0; let prevY=0;
-window.addEventListener('pointerdown', (e)=>{ isPointerDown=true; prevX=e.clientX; prevY=e.clientY; renderer.domElement.style.cursor='grabbing'; });
-window.addEventListener('pointerup', ()=>{ isPointerDown=false; renderer.domElement.style.cursor='default'; });
-window.addEventListener('pointermove', (e)=>{ if(isPointerDown){ const dx=(e.clientX-prevX)/200; const dy=(e.clientY-prevY)/200; camera.position.applyAxisAngle(new THREE.Vector3(0,1,0), -dx); camera.position.y = Math.max(10, camera.position.y + dy*40); camera.lookAt(new THREE.Vector3(0,40,0)); prevX=e.clientX; prevY=e.clientY; } });
+      const gridSize = 110;
+      for (let x = -360; x <= 360; x += gridSize) {
+        for (let z = -360; z <= 360; z += gridSize) {
+          const w = 28 + Math.random() * 34;
+          const d = 28 + Math.random() * 34;
+          const h = 40 + Math.random() * 210;
+          const mat = Math.random() > 0.7 ? matGlass : Math.random() > 0.4 ? matConcrete : matSteel;
+          addBlock(x + (Math.random() - 0.5) * 20, h / 2 - 2, z + (Math.random() - 0.5) * 20, w, h, d, mat, true);
+          if (Math.random() > 0.7) {
+            addPipe(x + w * 0.4, 10, z + d * 0.3, h * 0.6);
+            addPipe(x - w * 0.35, 12, z - d * 0.25, h * 0.7);
+          }
+          if (Math.random() > 0.75) {
+            addMarker(x + (Math.random() - 0.5) * 12, h + 12, z + (Math.random() - 0.5) * 12, Math.random() > 0.5 ? 0x00ffff : 0xff5ad9);
+          }
+        }
+      }
 
-// --- Resize ---
-window.addEventListener('resize', ()=>{ camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); });
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(26, 26, 2, 30), matJumpPad);
+      pad.position.set(0, 2, 0);
+      pad.receiveShadow = true;
+      pad.castShadow = true;
+      scene.add(pad);
+      worldObjects.push(pad);
 
-// --- Basic animation loop ---
-generateCity();
-let last = performance.now();
-function animate(){ const now = performance.now(); const dt = (now-last)/1000; last = now; // subtle sky color pulse
-  const t = now/5000;
-  skyMat.uniforms.topColor.value.setHSL(0.58 + Math.sin(t)*0.01, 0.5, 0.07);
-  skyMat.uniforms.bottomColor.value.setHSL(0.6 + Math.cos(t)*0.01, 0.6, 0.02);
-  // environment update occasionally for slightly animated reflections (costly if done each frame)
-  if (Math.floor(now/1000) % 5 === 0) {
-    // reuse existing pmrem render texture (cheap-ish) - in practice don't call every frame
-    const env = pmremGenerator.fromScene(skyMesh, 0.04);
-    scene.environment = env.texture;
-  }
-  composer.render(dt);
-  requestAnimationFrame(animate);
-}
-animate();
+      // marker to chase
+      const target = addMarker(0, 80, 180, 0x00ffff);
+      target.scale.set(1.2, 1.2, 1.2);
+    }
 
-</script>
+    makeCity();
+
+    // Player state
+    const player = {
+      pos: new THREE.Vector3(0, 22, 50),
+      vel: new THREE.Vector3(),
+      yaw: 0,
+      pitch: -0.35,
+      speed: 30,
+      sprint: 1,
+      onGround: true,
+      height: 1.8,
+      radius: 0.7,
+      mouseLocked: false,
+      score: 0
+    };
+
+    const keys = {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+      sprint: false,
+      jump: false
+    };
+
+    const menu = document.getElementById('menu');
+    const hud = document.getElementById('hud');
+    const scoreNode = document.getElementById('score');
+    const speedBar = document.getElementById('speed-bar');
+    const toast = document.getElementById('mini-toast');
+
+    function startGame(mode) {
+      menu.style.display = 'none';
+      hud.style.display = 'block';
+      scoreNode.style.display = 'block';
+      document.body.requestPointerLock();
+      player.pos.set(0, 22, 50);
+      player.vel.set(0, 0, 0);
+      player.mouseLocked = true;
+      if (mode === 'classic') {
+        scene.fog = new THREE.Fog(0x050510, 12, 360);
+        dirLight.intensity = 0.9;
+        bloomPass.strength = 1.4;
+      } else {
+        scene.fog = new THREE.Fog(0x050b16, 36, 520);
+        dirLight.intensity = 1.6;
+        bloomPass.strength = 1.0;
+      }
+    }
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.style.opacity = '1';
+      clearTimeout(showToast.timeout);
+      showToast.timeout = setTimeout(() => {
+        toast.style.opacity = '0';
+      }, 1200);
+    }
+
+    document.addEventListener('pointerlockchange', () => {
+      player.mouseLocked = document.pointerLockElement === document.body;
+    });
+
+    document.addEventListener('mousemove', (event) => {
+      if (!player.mouseLocked) return;
+      player.yaw -= event.movementX * 0.0022;
+      player.pitch -= event.movementY * 0.0018;
+      player.pitch = THREE.MathUtils.clamp(player.pitch, -1.35, 1.35);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      switch (event.code) {
+        case 'KeyW': keys.forward = true; break;
+        case 'KeyS': keys.backward = true; break;
+        case 'KeyA': keys.left = true; break;
+        case 'KeyD': keys.right = true; break;
+        case 'ShiftLeft': keys.sprint = true; break;
+        case 'Space': if (player.onGround) { player.vel.y = 14; player.onGround = false; } break;
+        case 'KeyR': player.pos.set(0, 22, 50); break;
+      }
+    });
+
+    document.addEventListener('keyup', (event) => {
+      switch (event.code) {
+        case 'KeyW': keys.forward = false; break;
+        case 'KeyS': keys.backward = false; break;
+        case 'KeyA': keys.left = false; break;
+        case 'KeyD': keys.right = false; break;
+        case 'ShiftLeft': keys.sprint = false; break;
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+      ssaoPass.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    function updatePlayer(dt) {
+      const moveX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+      const moveZ = (keys.forward ? 1 : 0) - (keys.backward ? 1 : 0);
+
+      const forward = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+      const right = new THREE.Vector3(forward.z, 0, -forward.x);
+
+      const dir = new THREE.Vector3();
+      dir.addScaledVector(forward, moveZ);
+      dir.addScaledVector(right, moveX);
+
+      if (dir.lengthSq() > 0) dir.normalize();
+
+      const runSpeed = keys.sprint ? 46 : 28;
+      player.vel.x = THREE.MathUtils.lerp(player.vel.x, dir.x * runSpeed, 0.12);
+      player.vel.z = THREE.MathUtils.lerp(player.vel.z, dir.z * runSpeed, 0.12);
+
+      player.vel.y -= 42 * dt;
+      player.pos.addScaledVector(player.vel, dt);
+
+      if (player.pos.y < 2) {
+        player.pos.y = 2;
+        player.vel.y = 0;
+        player.onGround = true;
+      }
+
+      const speed = Math.hypot(player.vel.x, player.vel.z);
+      speedBar.style.width = `${Math.min(100, speed / 55 * 100)}%`;
+
+      camera.position.copy(player.pos);
+      const lookTarget = new THREE.Vector3(
+        player.pos.x + Math.sin(player.yaw) * Math.cos(player.pitch),
+        player.pos.y + Math.sin(player.pitch) + 1.5,
+        player.pos.z + Math.cos(player.yaw) * Math.cos(player.pitch)
+      );
+      camera.lookAt(lookTarget);
+    }
+
+    // small pulsing animation of neon markers
+    let pulseTick = 0;
+    function animateNeon(dt) {
+      pulseTick += dt;
+      for (const obj of neonObjects) {
+        if (obj.material && obj.material.emissive) {
+          const intensity = 1 + Math.sin(pulseTick * 4 + obj.position.x * 0.1) * 0.4;
+          obj.material.emissiveIntensity = intensity;
+        }
+      }
+    }
+
+    function animate() {
+      const now = performance.now();
+      const dt = Math.min(0.033, (now - (animate.last || now)) / 1000);
+      animate.last = now;
+
+      updatePlayer(dt);
+      animateNeon(dt);
+
+      // sky drift for more cinematic motion
+      skySphere.rotation.y += dt * 0.02;
+      skyGroup.rotation.y = Math.sin(now * 0.00012) * 0.05;
+
+      composer.render();
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
 </body>
 </html>
